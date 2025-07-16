@@ -35,12 +35,6 @@ func Handler(r *ghttp.Request) {
 	//create a real minesweeper map just have mine or not
 	var x, y, mineNum uint = option.X, option.Y, option.MineNUM
 
-	board, err := logic.CreateRealMap(x, y, mineNum)
-	if err != nil {
-		model.Logger.Errorf(ctx, "failed to create map: %v", err)
-		return
-	}
-	logic.SaveBoardWithCoords(ctx, board)
 	// Initialize user map with zeros
 	// This map will be used to track the user's flags and revealed cells
 	userMap := make([][]byte, x)
@@ -49,12 +43,13 @@ func Handler(r *ghttp.Request) {
 	}
 
 	client := &model.Client{
-		ID:         userID,
-		Conn:       ws,
-		MapServer:  board,
-		MapClient:  userMap,
-		Map_size_x: x,
-		Map_size_y: y,
+		ID:           userID,
+		Conn:         ws,
+		MapClient:    userMap,
+		MapServer:    nil,
+		Map_size_x:   x,
+		Map_size_y:   y,
+		Map_mine_num: mineNum,
 	}
 
 	mes, err := service.PackWebMessageJson(ctx, model.TypeOrigin, client, userID)

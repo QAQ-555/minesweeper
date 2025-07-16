@@ -15,12 +15,13 @@ type WebMessage struct {
 }
 
 type Client struct {
-	ID         string
-	Conn       *websocket.Conn
-	MapServer  [][]bool
-	MapClient  [][]byte
-	Map_size_x uint
-	Map_size_y uint
+	ID           string
+	Conn         *websocket.Conn
+	MapServer    [][]bool
+	MapClient    [][]byte
+	Map_size_x   uint
+	Map_size_y   uint
+	Map_mine_num uint
 }
 
 type GameCtrlpayload struct {

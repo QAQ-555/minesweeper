@@ -22,43 +22,59 @@ import (
 //
 //	A pointer to a 2D boolean array, where true indicates a mine and false indicates an empty cell.
 //	An error if the number of mines exceeds the board size.
-func CreateRealMap(x uint, y uint, n uint) ([][]bool, error) {
-	// Check if the dimensions are greater than zero
+func CreateRealMap(x, y, n, safeX, safeY uint) ([][]bool, error) {
 	if x == 0 || y == 0 {
 		return nil, gerror.New("board dimensions must be greater than zero")
 	}
-	// Check if the number of mines is greater than zero
 	if n == 0 {
 		return nil, gerror.New("number of mines must be greater than zero")
 	}
-	// Check if the number of mines exceeds the total number of cells
-	if n > x*y {
-		return nil, gerror.New("number of mines exceeds board size")
+	if n >= x*y {
+		return nil, gerror.New("number of mines exceeds or equals board size")
+	}
+	if safeX >= x || safeY >= y {
+		return nil, gerror.New("safe coordinate out of bounds")
 	}
 
-	// Create a 2D slice with the specified dimensions
 	board := make([][]bool, y)
 	for i := range board {
 		board[i] = make([]bool, x)
 	}
+
 	total := int(x * y)
 
-	positions := make([]bool, total)
-
-	for i := 0; i < int(n); i++ {
-		positions[i] = model.MineCell
-	}
-
-	rand.Shuffle(total, func(i, j int) {
-		positions[i], positions[j] = positions[j], positions[i]
-	})
+	// 先生成 [0, total) 的下标
+	indices := make([]int, 0, total-1)
+	safeIndex := int(safeY*x + safeX)
 
 	for i := 0; i < total; i++ {
-		row := i / int(x)
-		col := i % int(x)
-
-		board[row][col] = positions[i]
+		if i == safeIndex {
+			continue // 跳过安全位置
+		}
+		indices = append(indices, i)
 	}
+
+	// 检查剩余可布雷格子数是否够
+	if n > uint(len(indices)) {
+		return nil, gerror.New("too many mines for available cells excluding safe cell")
+	}
+
+	// 打乱 indices
+	rand.Shuffle(len(indices), func(i, j int) {
+		indices[i], indices[j] = indices[j], indices[i]
+	})
+
+	// 前 n 个放雷
+	for i := 0; i < int(n); i++ {
+		idx := indices[i]
+		row := idx / int(x)
+		col := idx % int(x)
+		board[row][col] = true
+	}
+
+	// 确保 safe cell 没有雷
+	board[safeY][safeX] = false
+
 	return board, nil
 }
 
@@ -80,6 +96,8 @@ func HandleLeftClick(x, y uint, c *model.Client) {
 
 	if c.MapServer[y][x] == model.MineCell {
 		fmt.Printf("game.end")
+	} else {
+		fmt.Printf("num around :%d", getAroundMineNum(x, y, c))
 	}
 
 }
@@ -97,18 +115,16 @@ func getAroundMineNum(x, y uint, c *model.Client) uint {
 	for _, dir := range directions {
 		newX := int(x) + dir.X
 		newY := int(y) + dir.Y
-
 		if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
 			continue
 		}
-		if c.MapServer[y][x] == model.MineCell {
+		if c.MapServer[newY][newX] == model.MineCell {
 			count++
 		}
 	}
 	return uint(count)
 }
 
-// 保存board到文件，使用■和□表示雷区，并加坐标轴
 func SaveBoardWithCoords(ctx context.Context, board [][]bool) error {
 	name := ctx.Value("requestID")
 	filename := "default.txt"
