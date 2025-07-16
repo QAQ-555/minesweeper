@@ -51,6 +51,9 @@
 let ws;
 let xSize, ySize;
 
+// 用于缓存多个msgid的数据
+const messageBuffers = new Map();
+
 document.addEventListener("contextmenu", e => e.preventDefault());
 
 document.getElementById('start').onclick = () => {
@@ -74,23 +77,24 @@ document.getElementById('start').onclick = () => {
   };
 
   ws.onmessage = (e) => {
-    console.log("server:", e.data);
-    // TODO: handle server updates if needed
+    const msg = JSON.parse(e.data);
+    if (msg.type === 16 && msg.payload && msg.payload.msgid !== undefined) {
+      handlePartialUpdate(msg.payload);
+    } else {
+      console.log("server:", e.data);
+    }
   };
 };
 
 function createBoardWithCoords(x, y) {
   const board = document.getElementById('board');
-  // +1 是为了坐标轴第一行
   board.style.gridTemplateColumns = `30px repeat(${x}, 30px)`;
   board.innerHTML = '';
 
-  // 第一格左上角空白坐标格
   const corner = document.createElement('div');
   corner.className = 'coord';
   board.appendChild(corner);
 
-  // 横坐标
   for(let col=0; col < x; col++) {
     const coordX = document.createElement('div');
     coordX.className = 'coord';
@@ -98,15 +102,12 @@ function createBoardWithCoords(x, y) {
     board.appendChild(coordX);
   }
 
-  // 内容行
   for(let row=0; row < y; row++) {
-    // 纵坐标
     const coordY = document.createElement('div');
     coordY.className = 'coord';
     coordY.textContent = row;
     board.appendChild(coordY);
 
-    // 雷区格子
     for(let col=0; col < x; col++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
@@ -115,7 +116,7 @@ function createBoardWithCoords(x, y) {
 
       cell.onmousedown = (e) => {
         e.preventDefault();
-        const click = (e.button === 0); // 左键 true，右键 false
+        const click = (e.button === 0);
         const payload = {
           type: 15,
           id: "sss",
@@ -129,6 +130,46 @@ function createBoardWithCoords(x, y) {
       };
 
       board.appendChild(cell);
+    }
+  }
+}
+
+// 缓存并处理分批消息
+function handlePartialUpdate(payload) {
+  const { msgid, x, y, num, end } = payload;
+
+  if (!messageBuffers.has(msgid)) {
+    messageBuffers.set(msgid, []);
+  }
+  const buffer = messageBuffers.get(msgid);
+  buffer.push({ x, y, num });
+
+  if (end) {
+    // 收到结束标志，开始渲染
+    renderCells(buffer);
+    // 清理缓存
+    messageBuffers.delete(msgid);
+  }
+}
+
+function renderCells(cells) {
+  for (const cell of cells) {
+    const selector = `.cell[data-x="${cell.x}"][data-y="${cell.y}"]`;
+    const elem = document.querySelector(selector);
+    if (!elem) continue;
+
+    if (cell.num === 0) {
+      elem.textContent = '';
+      elem.style.backgroundColor = '#eee';
+    } else if (cell.num === 9) { // 假设9是flag标记，调整根据后端定义
+      elem.textContent = '🚩';
+      elem.style.backgroundColor = 'lightyellow';
+    } else if (cell.num === 10) { // 例如雷，调整根据后端定义
+      elem.textContent = '💣';
+      elem.style.backgroundColor = 'lightcoral';
+    } else {
+      elem.textContent = cell.num;
+      elem.style.backgroundColor = '#ddd';
     }
   }
 }

@@ -92,14 +92,41 @@ func GetUserMap(Realmap *[][]bool) *[][]byte {
 	return nil
 }
 
-func HandleLeftClick(x, y uint, c *model.Client) {
-
-	if c.MapServer[y][x] == model.MineCell {
-		fmt.Printf("game.end")
-	} else {
-		fmt.Printf("num around :%d", getAroundMineNum(x, y, c))
+func HandleLeftClick(x, y uint, c *model.Client, result *[]model.ClickResultpayload) {
+	directions := [8]struct{ X, Y int }{
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
 	}
 
+	// 如果已经揭开过了，直接返回
+	if c.MapClient[y][x] != model.Unknown {
+		return
+	}
+
+	// 计算周围雷数
+	count := getAroundMineNum(x, y, c)
+
+	// 标记当前点
+	c.MapClient[y][x] = byte(count)
+
+	if count == 0 {
+		// 如果周围没有雷，递归揭开周围
+		for _, dir := range directions {
+			newX := int(x) + dir.X
+			newY := int(y) + dir.Y
+			if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
+				continue
+			}
+			HandleLeftClick(uint(newX), uint(newY), c, result)
+		}
+	}
+	oneResult := &model.ClickResultpayload{
+		X:       x,
+		Y:       y,
+		MineNum: count,
+	}
+	*result = append(*result, *oneResult)
+	fmt.Printf("open(%d,%d),%d\n", y, x, count)
 }
 
 func HandleRightClick(x, y uint) {

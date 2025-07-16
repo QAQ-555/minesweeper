@@ -14,11 +14,20 @@ const (
 	seven byte = 7
 	eight byte = 8
 	// flag is used to mark a cell as flagged
-	flag byte = 9
+	Flag    byte = 0x0f
+	Unknown byte = 0x10
 ) //8向方位代码
 
 type GameOptionPayload struct {
 	X       uint `json:"x"`
 	Y       uint `json:"y"`
 	MineNUM uint `json:"num"`
+}
+
+type ClickResultpayload struct {
+	X       uint   `json:"x"`
+	Y       uint   `json:"y"`
+	MineNum uint   `json:"num"`
+	MsgId   string `json:"msgid"`
+	IsEnd   bool   `json:"end"`
 }

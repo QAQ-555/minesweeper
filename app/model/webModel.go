@@ -33,6 +33,7 @@ type GameCtrlpayload struct {
 const (
 	TypeOrigin byte = 0x00
 	TypeCtrl   byte = 0x0F
+	TypeResult byte = 0x10
 )
 
 const (

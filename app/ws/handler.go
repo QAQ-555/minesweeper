@@ -40,6 +40,9 @@ func Handler(r *ghttp.Request) {
 	userMap := make([][]byte, x)
 	for i := range userMap {
 		userMap[i] = make([]byte, y)
+		for j := range userMap[i] {
+			userMap[i][j] = model.Unknown
+		}
 	}
 
 	client := &model.Client{
@@ -88,6 +91,7 @@ func handleClientMessages(ctx context.Context, client *model.Client) {
 		model.Logger.Infof(ctx, "received message type: %d, id : %s ,payload: %s", gameMsgtype, id, payload)
 
 		switch gameMsgtype {
+
 		case model.TypeCtrl:
 			model.Logger.Infof(ctx, "enter ctrl")
 			err = service.ProcessGameCtrlPayload(ctx, payload, client)
