@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Minesweeper</title>
+<style>
+  #board-container {
+    display: inline-block;
+    margin-top: 20px;
+  }
+  #board {
+    display: grid;
+    gap: 2px;
+    /* grid-template-columns 会动态设置 */
+  }
+  .cell, .coord {
+    width: 30px;
+    height: 30px;
+    text-align: center;
+    line-height: 30px;
+    user-select: none;
+  }
+  .cell {
+    background: lightgray;
+    cursor: pointer;
+  }
+  .coord {
+    background: #ddd;
+    font-weight: bold;
+    cursor: default;
+  }
+</style>
+</head>
+<body>
+<h1>Minesweeper</h1>
+
+<div id="config">
+  <label>X: <input type="number" id="x" value="10"></label>
+  <label>Y: <input type="number" id="y" value="10"></label>
+  <label>Mines: <input type="number" id="num" value="5"></label>
+  <button id="start">Start Game</button>
+</div>
+
+<div id="game" style="display:none;">
+  <div id="board-container">
+    <div id="board"></div>
+  </div>
+</div>
+
+<script>
+let ws;
+let xSize, ySize;
+
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+document.getElementById('start').onclick = () => {
+  xSize = parseInt(document.getElementById('x').value);
+  ySize = parseInt(document.getElementById('y').value);
+  const num = parseInt(document.getElementById('num').value);
+
+  ws = new WebSocket("ws://localhost:8001/ws");
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      type: 0,
+      id: "sss",
+      payload: { x: xSize, y: ySize, num: num }
+    }));
+
+    document.getElementById('config').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+
+    createBoardWithCoords(xSize, ySize);
+  };
+
+  ws.onmessage = (e) => {
+    console.log("server:", e.data);
+    // TODO: handle server updates if needed
+  };
+};
+
+function createBoardWithCoords(x, y) {
+  const board = document.getElementById('board');
+  // +1 是为了坐标轴第一行
+  board.style.gridTemplateColumns = `30px repeat(${x}, 30px)`;
+  board.innerHTML = '';
+
+  // 第一格左上角空白坐标格
+  const corner = document.createElement('div');
+  corner.className = 'coord';
+  board.appendChild(corner);
+
+  // 横坐标
+  for(let col=0; col < x; col++) {
+    const coordX = document.createElement('div');
+    coordX.className = 'coord';
+    coordX.textContent = col;
+    board.appendChild(coordX);
+  }
+
+  // 内容行
+  for(let row=0; row < y; row++) {
+    // 纵坐标
+    const coordY = document.createElement('div');
+    coordY.className = 'coord';
+    coordY.textContent = row;
+    board.appendChild(coordY);
+
+    // 雷区格子
+    for(let col=0; col < x; col++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.x = col;
+      cell.dataset.y = row;
+
+      cell.onmousedown = (e) => {
+        e.preventDefault();
+        const click = (e.button === 0); // 左键 true，右键 false
+        const payload = {
+          type: 15,
+          id: "sss",
+          payload: {
+            x: col,
+            y: row,
+            click: click
+          }
+        };
+        ws.send(JSON.stringify(payload));
+      };
+
+      board.appendChild(cell);
+    }
+  }
+}
+</script>
+</body>
+</html>

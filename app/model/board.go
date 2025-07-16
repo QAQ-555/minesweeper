@@ -20,5 +20,5 @@ const (
 type GameOptionPayload struct {
 	X       uint `json:"x"`
 	Y       uint `json:"y"`
-	MineNUM uint `json:num`
+	MineNUM uint `json:"num"`
 }

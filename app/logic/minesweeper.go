@@ -1,7 +1,12 @@
 package logic
 
 import (
+	"context"
+	"fmt"
 	"math/rand/v2"
+	"minesweeper/app/model"
+	"os"
+	"strconv"
 
 	"github.com/gogf/gf/errors/gerror"
 )
@@ -17,7 +22,7 @@ import (
 //
 //	A pointer to a 2D boolean array, where true indicates a mine and false indicates an empty cell.
 //	An error if the number of mines exceeds the board size.
-func CreateRealMap(x uint, y uint, n uint) (*[][]bool, error) {
+func CreateRealMap(x uint, y uint, n uint) ([][]bool, error) {
 	// Check if the dimensions are greater than zero
 	if x == 0 || y == 0 {
 		return nil, gerror.New("board dimensions must be greater than zero")
@@ -41,7 +46,7 @@ func CreateRealMap(x uint, y uint, n uint) (*[][]bool, error) {
 	positions := make([]bool, total)
 
 	for i := 0; i < int(n); i++ {
-		positions[i] = true
+		positions[i] = model.MineCell
 	}
 
 	rand.Shuffle(total, func(i, j int) {
@@ -54,14 +59,7 @@ func CreateRealMap(x uint, y uint, n uint) (*[][]bool, error) {
 
 		board[row][col] = positions[i]
 	}
-
-	for i := 0; i < int(y); i++ {
-		for j := 0; j < int(x); j++ {
-			print(" ", board[i][j])
-		}
-		println()
-	}
-	return &board, nil
+	return board, nil
 }
 
 // GetUserMap is a placeholder function that should return a client view of the map.
@@ -78,10 +76,89 @@ func GetUserMap(Realmap *[][]bool) *[][]byte {
 	return nil
 }
 
-func HandleLeftClick(x, y uint) {
+func HandleLeftClick(x, y uint, c *model.Client) {
+
+	if c.MapServer[y][x] == model.MineCell {
+		fmt.Printf("game.end")
+	}
 
 }
 
 func HandleRightClick(x, y uint) {
 
+}
+
+func getAroundMineNum(x, y uint, c *model.Client) uint {
+	directions := [8]struct{ X, Y int }{
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
+	}
+	count := 0
+	for _, dir := range directions {
+		newX := int(x) + dir.X
+		newY := int(y) + dir.Y
+
+		if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
+			continue
+		}
+		if c.MapServer[y][x] == model.MineCell {
+			count++
+		}
+	}
+	return uint(count)
+}
+
+// 保存board到文件，使用■和□表示雷区，并加坐标轴
+func SaveBoardWithCoords(ctx context.Context, board [][]bool) error {
+	name := ctx.Value("requestID")
+	filename := "default.txt"
+	if str, ok := name.(string); ok && str != "" {
+		filename = fmt.Sprintf("%s.txt", str)
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// 横坐标头
+	_, _ = file.WriteString("   ") // 缩进3空格
+	for x := 0; x < len(board[0]); x++ {
+		_, _ = file.WriteString(strconv.Itoa(x) + " ")
+	}
+	_, _ = file.WriteString("\n")
+
+	// 每行写纵坐标和内容
+	for y, row := range board {
+		_, _ = file.WriteString(strconv.Itoa(y) + " ") // 写纵坐标
+		if y < 10 {
+			_, _ = file.WriteString(" ") // 保证对齐，两位数以上可调整
+		}
+		for _, cell := range row {
+			if cell {
+				_, _ = file.WriteString("■ ")
+			} else {
+				_, _ = file.WriteString("□ ")
+			}
+		}
+		_, _ = file.WriteString("\n")
+	}
+
+	return nil
+}
+
+// 删除ctx中requestID命名的文件
+func DeleteBoardFile(ctx context.Context) error {
+	name := ctx.Value("requestID")
+	filename := "default.txt"
+	if str, ok := name.(string); ok && str != "" {
+		filename = fmt.Sprintf("%s.txt", str)
+	}
+
+	err := os.Remove(filename)
+	if err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+	return nil
 }

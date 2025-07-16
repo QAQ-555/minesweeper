@@ -40,7 +40,7 @@ func Handler(r *ghttp.Request) {
 		model.Logger.Errorf(ctx, "failed to create map: %v", err)
 		return
 	}
-
+	logic.SaveBoardWithCoords(ctx, board)
 	// Initialize user map with zeros
 	// This map will be used to track the user's flags and revealed cells
 	userMap := make([][]byte, x)
@@ -49,10 +49,12 @@ func Handler(r *ghttp.Request) {
 	}
 
 	client := &model.Client{
-		ID:        userID,
-		Conn:      ws,
-		MapServer: board,
-		MapClient: &userMap,
+		ID:         userID,
+		Conn:       ws,
+		MapServer:  board,
+		MapClient:  userMap,
+		Map_size_x: x,
+		Map_size_y: y,
 	}
 
 	mes, err := service.PackWebMessageJson(ctx, model.TypeOrigin, client, userID)
@@ -65,8 +67,6 @@ func Handler(r *ghttp.Request) {
 
 	// Message handling loop
 	go handleClientMessages(ctx, client)
-	// Log connection closure
-	model.Logger.Info(ctx, "websocket connection closed")
 
 }
 
@@ -74,24 +74,28 @@ func handleClientMessages(ctx context.Context, client *model.Client) {
 	defer func() {
 		model.Logger.Info(ctx, "free resource for client: %s", client.ID)
 		client.Conn.Close()
+		model.Logger.Info(ctx, "websocket connection closed")
+		logic.DeleteBoardFile(ctx)
 	}()
 	// Message handling loop
 	for {
 		// Read incoming WebSocket message
-		wsMsgType, msg, err := client.Conn.ReadMessage()
+		_, msg, err := client.Conn.ReadMessage()
 		if err != nil {
 			break // Connection closed or error occurred
 		}
+
 		gameMsgtype, id, payload, err := service.UnpackWebMessage(msg)
 		if err != nil {
 			log.Printf("Failed to parse JSON from %s: %v", client.ID, err)
 			continue
 		}
-		model.Logger.Infof(ctx, "received message type: %d, id : %s ,payload: \n %s", gameMsgtype, id, payload)
+		model.Logger.Infof(ctx, "received message type: %d, id : %s ,payload: %s", gameMsgtype, id, payload)
 
 		switch gameMsgtype {
 		case model.TypeCtrl:
-			err = service.ProcessGameCtrlPayload(ctx, payload)
+			model.Logger.Infof(ctx, "enter ctrl")
+			err = service.ProcessGameCtrlPayload(ctx, payload, client)
 		default:
 			model.Logger.Errorf(ctx, "unknown message type: %d", gameMsgtype)
 			continue
@@ -100,13 +104,6 @@ func handleClientMessages(ctx context.Context, client *model.Client) {
 		if err != nil {
 			model.Logger.Errorf(ctx, "Failed to parse payload from %s: %v", client.ID, err)
 			continue
-		}
-
-		// Log received message
-		model.Logger.Infof(ctx, "received message: %s", msg)
-		// Echo the message back to client
-		if err = client.Conn.WriteMessage(wsMsgType, msg); err != nil {
-			break // Error writing message
 		}
 	}
 }
@@ -205,6 +202,5 @@ func handleRegisterMessage(msg []byte) (bool, *model.GameOptionPayload, error) {
 	if err := json.Unmarshal(payload, &gameoption); err != nil {
 		return false, nil, err
 	}
-	fmt.Printf("(%d %d %d)", gameoption.MineNUM, gameoption.X, gameoption.Y)
 	return true, &gameoption, err
 }
