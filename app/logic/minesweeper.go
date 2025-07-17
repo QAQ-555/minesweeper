@@ -100,16 +100,18 @@ func GetUserMap(Realmap *[][]bool) *[][]byte {
 func HandleLeftClick(ctx context.Context, x, y uint, c *model.Client) {
 	if c.MapServer[y][x] == model.MineCell {
 		msgChainId := uuid.NewString()
+		count := 0
 		for y, row := range c.MapServer {
 			for x, val := range row {
 				if val == model.MineCell {
-					isEnd := (x == int(c.Map_size_x-1) && y == int(c.Map_size_y-1))
+					count++
+					isEnd := (count == int(c.Map_mine_num))
 					mine := model.ClickResultpayload{
 						X:       uint(x),
 						Y:       uint(y),
 						MsgId:   msgChainId,
 						IsEnd:   isEnd,
-						MineNum: 9}
+						MineNum: 10}
 					data, err := service.PackWebMessageJson(ctx, model.TypeBoom, mine, "")
 					if err != nil {
 						model.Logger.Panicf(ctx, "unkonw fail!!")

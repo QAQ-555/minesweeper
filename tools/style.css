@@ -1,0 +1,28 @@
+#board-container {
+  display: inline-block;
+  margin-top: 20px;
+}
+
+#board {
+  display: grid;
+  gap: 2px;
+}
+
+.cell, .coord {
+  width: 30px;
+  height: 30px;
+  text-align: center;
+  line-height: 30px;
+  user-select: none;
+}
+
+.cell {
+  background: lightgray;
+  cursor: pointer;
+}
+
+.coord {
+  background: #ddd;
+  font-weight: bold;
+  cursor: default;
+}
