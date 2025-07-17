@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"minesweeper/app/controller"
 	"minesweeper/app/logic"
 	"minesweeper/app/model"
 	"minesweeper/app/service"
@@ -94,7 +95,7 @@ func handleClientMessages(ctx context.Context, client *model.Client) {
 
 		case model.TypeCtrl:
 			model.Logger.Infof(ctx, "enter ctrl")
-			err = service.ProcessGameCtrlPayload(ctx, payload, client)
+			err = controller.ProcessGameCtrlPayload(ctx, payload, client)
 		default:
 			model.Logger.Errorf(ctx, "unknown message type: %d", gameMsgtype)
 			continue

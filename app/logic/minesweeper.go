@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"minesweeper/app/model"
+	"minesweeper/app/service"
 	"os"
 	"strconv"
 
 	"github.com/gogf/gf/errors/gerror"
+	"github.com/google/uuid"
 )
 
 // CreateMap generates a minesweeper board with the given dimensions and number of mines.
@@ -95,7 +97,54 @@ func GetUserMap(Realmap *[][]bool) *[][]byte {
 	return nil
 }
 
-func HandleLeftClick(x, y uint, c *model.Client, result *[]model.ClickResultpayload) {
+func HandleLeftClick(ctx context.Context, x, y uint, c *model.Client) {
+	if c.MapServer[y][x] == model.MineCell {
+		msgChainId := uuid.NewString()
+		for y, row := range c.MapServer {
+			for x, val := range row {
+				if val == model.MineCell {
+					isEnd := (x == int(c.Map_size_x-1) && y == int(c.Map_size_y-1))
+					mine := model.ClickResultpayload{
+						X:       uint(x),
+						Y:       uint(y),
+						MsgId:   msgChainId,
+						IsEnd:   isEnd,
+						MineNum: 9}
+					data, err := service.PackWebMessageJson(ctx, model.TypeBoom, mine, "")
+					if err != nil {
+						model.Logger.Panicf(ctx, "unkonw fail!!")
+					}
+					err = c.Conn.WriteMessage(1, data)
+					if err != nil {
+						model.Logger.Errorf(ctx, "send massage fail")
+					}
+				}
+			}
+		}
+		return
+	}
+
+	result := make([]model.ClickResultpayload, 0)
+	blankCellRecursive(x, y, c, &result)
+	if len(result) != 0 {
+		msgChainId := uuid.NewString()
+		for i := range result {
+			isEnd := (i == len(result)-1)
+			result[i].IsEnd = isEnd
+			result[i].MsgId = msgChainId
+			data, err := service.PackWebMessageJson(ctx, model.TypeResult, result[i], "")
+			if err != nil {
+				model.Logger.Panicf(ctx, "unkonw fail!!")
+			}
+			err = c.Conn.WriteMessage(1, data)
+			if err != nil {
+				model.Logger.Errorf(ctx, "send massage fail")
+			}
+		}
+	}
+
+}
+func blankCellRecursive(x, y uint, c *model.Client, result *[]model.ClickResultpayload) {
 	directions := [8]struct{ X, Y int }{
 		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
 		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
@@ -108,7 +157,6 @@ func HandleLeftClick(x, y uint, c *model.Client, result *[]model.ClickResultpayl
 	// 计算周围雷数
 	count := getAroundMineNum(x, y, c)
 
-	// 标记当前点
 	c.MapClient[y][x] = byte(count)
 
 	if count == 0 {
@@ -119,9 +167,10 @@ func HandleLeftClick(x, y uint, c *model.Client, result *[]model.ClickResultpayl
 			if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
 				continue
 			}
-			HandleLeftClick(uint(newX), uint(newY), c, result)
+			blankCellRecursive(uint(newX), uint(newY), c, result)
 		}
 	}
+
 	oneResult := &model.ClickResultpayload{
 		X:       x,
 		Y:       y,

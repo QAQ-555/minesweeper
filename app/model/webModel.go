@@ -34,6 +34,7 @@ const (
 	TypeOrigin byte = 0x00
 	TypeCtrl   byte = 0x0F
 	TypeResult byte = 0x10
+	TypeBoom   byte = 0x11
 )
 
 const (
