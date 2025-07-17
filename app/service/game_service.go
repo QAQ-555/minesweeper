@@ -19,6 +19,7 @@ func ProcessGameCtrlPayload(ctx context.Context, payload json.RawMessage, c *mod
 	//when first click make map to make sure not first click game fail
 	if c.MapServer == nil {
 		board, err := logic.CreateRealMap(c.Map_size_x, c.Map_size_y, c.Map_mine_num, ctrl.X, ctrl.Y)
+		model.Logger.Debugf(ctx, "create map %d %d %d", c.Map_size_x, c.Map_size_y, c.Map_mine_num)
 		if err != nil {
 			model.Logger.Errorf(ctx, "failed to create map: %v", err)
 			return err
@@ -38,7 +39,7 @@ func ProcessGameCtrlPayload(ctx context.Context, payload json.RawMessage, c *mod
 		logic.HandleLeftClick(ctrl.X, ctrl.Y, c, &result)
 		if len(result) != 0 {
 			msgChainId := uuid.NewString()
-			for i, _ := range result {
+			for i := range result {
 				isEnd := (i == len(result)-1)
 				result[i].IsEnd = isEnd
 				result[i].MsgId = msgChainId

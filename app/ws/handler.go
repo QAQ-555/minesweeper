@@ -37,9 +37,9 @@ func Handler(r *ghttp.Request) {
 
 	// Initialize user map with zeros
 	// This map will be used to track the user's flags and revealed cells
-	userMap := make([][]byte, x)
+	userMap := make([][]byte, y)
 	for i := range userMap {
-		userMap[i] = make([]byte, y)
+		userMap[i] = make([]byte, x)
 		for j := range userMap[i] {
 			userMap[i][j] = model.Unknown
 		}

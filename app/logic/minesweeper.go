@@ -40,7 +40,6 @@ func CreateRealMap(x, y, n, safeX, safeY uint) ([][]bool, error) {
 	for i := range board {
 		board[i] = make([]bool, x)
 	}
-
 	total := int(x * y)
 
 	// 先生成 [0, total) 的下标
@@ -74,7 +73,11 @@ func CreateRealMap(x, y, n, safeX, safeY uint) ([][]bool, error) {
 
 	// 确保 safe cell 没有雷
 	board[safeY][safeX] = false
-
+	// for y, cow := range board {
+	// 	for x, val := range cow {
+	// 		fmt.Printf("board[%d][%d] = %t\n", y, x, val)
+	// 	}
+	// }
 	return board, nil
 }
 
@@ -97,7 +100,6 @@ func HandleLeftClick(x, y uint, c *model.Client, result *[]model.ClickResultpayl
 		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
 		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
 	}
-
 	// 如果已经揭开过了，直接返回
 	if c.MapClient[y][x] != model.Unknown {
 		return
@@ -126,7 +128,6 @@ func HandleLeftClick(x, y uint, c *model.Client, result *[]model.ClickResultpayl
 		MineNum: count,
 	}
 	*result = append(*result, *oneResult)
-	fmt.Printf("open(%d,%d),%d\n", y, x, count)
 }
 
 func HandleRightClick(x, y uint) {

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Minesweeper</title>
 <style>
   #board-container {
@@ -11,7 +11,6 @@
   #board {
     display: grid;
     gap: 2px;
-    /* grid-template-columns 会动态设置 */
   }
   .cell, .coord {
     width: 30px;
@@ -35,9 +34,9 @@
 <h1>Minesweeper</h1>
 
 <div id="config">
-  <label>X: <input type="number" id="x" value="10"></label>
-  <label>Y: <input type="number" id="y" value="10"></label>
-  <label>Mines: <input type="number" id="num" value="5"></label>
+  <label>X: <input type="number" id="x" value="3" /></label>
+  <label>Y: <input type="number" id="y" value="2" /></label>
+  <label>Mines: <input type="number" id="num" value="1" /></label>
   <button id="start">Start Game</button>
 </div>
 
@@ -113,20 +112,50 @@ function createBoardWithCoords(x, y) {
       cell.className = 'cell';
       cell.dataset.x = col;
       cell.dataset.y = row;
+      cell.dataset.flag = "false"; 
+      cell.dataset.revealed = "false"; // 新增 revealed 属性
 
       cell.onmousedown = (e) => {
         e.preventDefault();
-        const click = (e.button === 0);
-        const payload = {
-          type: 15,
-          id: "sss",
-          payload: {
-            x: col,
-            y: row,
-            click: click
+        const isLeftClick = (e.button === 0);
+        const isRightClick = (e.button === 2);
+
+        if (isRightClick) {
+          // 右键只能在未揭开的格子上插旗
+          if (cell.dataset.revealed === "true") {
+            return;
           }
-        };
-        ws.send(JSON.stringify(payload));
+
+          if (cell.dataset.flag === "false") {
+            cell.dataset.flag = "true";
+            cell.textContent = "🚩";
+            cell.style.backgroundColor = "lightyellow";
+          } else {
+            cell.dataset.flag = "false";
+            cell.textContent = "";
+            cell.style.backgroundColor = "lightgray";
+          }
+        } else if (isLeftClick) {
+          if (cell.dataset.flag === "true") {
+            // 如果有旗子，先取消旗子
+            cell.dataset.flag = "false";
+            cell.textContent = "";
+            cell.style.backgroundColor = "lightgray";
+          } else {
+            // 发送揭开请求
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 15,
+                id: "sss",
+                payload: {
+                  x: col,
+                  y: row,
+                  click: true
+                }
+              }));
+            }
+          }
+        }
       };
 
       board.appendChild(cell);
@@ -134,7 +163,7 @@ function createBoardWithCoords(x, y) {
   }
 }
 
-// 缓存并处理分批消息
+// 处理分批更新
 function handlePartialUpdate(payload) {
   const { msgid, x, y, num, end } = payload;
 
@@ -145,9 +174,7 @@ function handlePartialUpdate(payload) {
   buffer.push({ x, y, num });
 
   if (end) {
-    // 收到结束标志，开始渲染
     renderCells(buffer);
-    // 清理缓存
     messageBuffers.delete(msgid);
   }
 }
@@ -158,13 +185,18 @@ function renderCells(cells) {
     const elem = document.querySelector(selector);
     if (!elem) continue;
 
+    // 清除旗子状态
+    elem.dataset.flag = "false";
+    elem.dataset.revealed = "true"; // 标记为已揭开
+
     if (cell.num === 0) {
       elem.textContent = '';
       elem.style.backgroundColor = '#eee';
-    } else if (cell.num === 9) { // 假设9是flag标记，调整根据后端定义
+    } else if (cell.num === 9) { // 9是旗子
       elem.textContent = '🚩';
       elem.style.backgroundColor = 'lightyellow';
-    } else if (cell.num === 10) { // 例如雷，调整根据后端定义
+      elem.dataset.flag = "true";
+    } else if (cell.num === 10) { // 10是雷
       elem.textContent = '💣';
       elem.style.backgroundColor = 'lightcoral';
     } else {
