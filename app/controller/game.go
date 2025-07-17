@@ -29,7 +29,7 @@ func ProcessGameCtrlPayload(ctx context.Context, payload json.RawMessage, c *mod
 		logic.HandleLeftClick(ctx, ctrl.X, ctrl.Y, c)
 	} else {
 		model.Logger.Infof(ctx, "enter right")
-		//logic.HandleRightClick(ctrl.X, ctrl.Y)
+		logic.HandleRightClick(ctx, ctrl.X, ctrl.Y, c)
 	}
 	return nil
 }

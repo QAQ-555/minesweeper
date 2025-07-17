@@ -1,28 +1,104 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f4f4f4;
+}
+
+#config {
+    margin: 20px;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#config label {
+    margin-right: 15px;
+}
+
+#config input {
+    width: 60px;
+    padding: 5px;
+    margin-left: 5px;
+}
+
+#config button {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#config button:hover {
+    background-color: #45a049;
+}
+
+#game {
+    text-align: center;
+}
+
+#game-info {
+    display: flex;
+    justify-content: space-between;
+    width: 400px;
+    margin: 20px 0;
+    padding: 10px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 #board-container {
-  display: inline-block;
-  margin-top: 20px;
+    background-color: #ddd;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 #board {
-  display: grid;
-  gap: 2px;
+    display: grid;
+    gap: 2px;
 }
 
 .cell, .coord {
-  width: 30px;
-  height: 30px;
-  text-align: center;
-  line-height: 30px;
-  user-select: none;
+    width: 30px;
+    height: 30px;
+    text-align: center;
+    line-height: 30px;
+    user-select: none;
 }
 
 .cell {
-  background: lightgray;
-  cursor: pointer;
+    /* 未挖开的单元格设置为草绿色 */
+    background-color: #8bc34a; 
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.cell:hover {
+    background-color: #7cb342;
+}
+
+.cell.revealed {
+    /* 挖开的单元格设置为黄色 */
+    background-color: #ffeb3b; 
+}
+
+.cell.flagged {
+    background-color: #ffc107;
+}
+
+.cell.mine {
+    background-color: #f44336;
 }
 
 .coord {
-  background: #ddd;
-  font-weight: bold;
-  cursor: default;
+    background-color: #ccc;
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 4px;
 }

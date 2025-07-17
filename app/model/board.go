@@ -27,7 +27,7 @@ type GameOptionPayload struct {
 type ClickResultpayload struct {
 	X       uint   `json:"x"`
 	Y       uint   `json:"y"`
-	MineNum uint   `json:"num"`
+	MineNum byte   `json:"num"`
 	MsgId   string `json:"msgid"`
 	IsEnd   bool   `json:"end"`
 }

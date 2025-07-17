@@ -1,26 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8" />
-<title>Minesweeper</title>
-<link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <title>扫雷游戏</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h1>Minesweeper</h1>
-
-<div id="config">
-  <label>X: <input type="number" id="x" value="3" /></label>
-  <label>Y: <input type="number" id="y" value="2" /></label>
-  <label>Mines: <input type="number" id="num" value="1" /></label>
-  <button id="start">Start Game</button>
-</div>
-
-<div id="game" style="display:none;">
-  <div id="board-container">
-    <div id="board"></div>
-  </div>
-</div>
-
-<script src="main.js"></script>
+    <h1>扫雷游戏</h1>
+    <div id="config">
+        <label>列数: <input type="number" id="x" value="10" min="5" max="30"></label>
+        <label>行数: <input type="number" id="y" value="10" min="5" max="30"></label>
+        <label>地雷数: <input type="number" id="num" value="10" min="1"></label>
+        <button id="start">开始游戏</button>
+    </div>
+    <div id="game" style="display: none;">
+        <div id="game-info">
+            <div id="mine-count">剩余地雷: 0</div>
+            <div id="timer">用时: 0 秒</div>
+            <div id="game-status">游戏进行中</div>
+            <!-- 添加坐标显示区域 -->
+            <div id="coords">坐标: (0, 0)</div> 
+        </div>
+        <div id="board-container">
+            <div id="board"></div>
+        </div>
+    </div>
+    <script src="main.js"></script>
 </body>
 </html>

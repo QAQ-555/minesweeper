@@ -98,7 +98,15 @@ func GetUserMap(Realmap *[][]bool) *[][]byte {
 }
 
 func HandleLeftClick(ctx context.Context, x, y uint, c *model.Client) {
+	model.Logger.Infof(ctx, "Left click received at position (%d, %d) for client %s", x, y, c.ID)
+
+	if c.MapClient[y][x] != model.Unknown {
+		model.Logger.Infof(ctx, "Cell at position (%d, %d) is not in unknown state, skipping. Current state: %d", x, y, c.MapClient[y][x])
+		return
+	}
+
 	if c.MapServer[y][x] == model.MineCell {
+		model.Logger.Infof(ctx, "Mine clicked at position (%d, %d). Sending boom messages.", x, y)
 		msgChainId := uuid.NewString()
 		count := 0
 		for y, row := range c.MapServer {
@@ -111,42 +119,82 @@ func HandleLeftClick(ctx context.Context, x, y uint, c *model.Client) {
 						Y:       uint(y),
 						MsgId:   msgChainId,
 						IsEnd:   isEnd,
-						MineNum: 10}
-					data, err := service.PackWebMessageJson(ctx, model.TypeBoom, mine, "")
+						MineNum: 10,
+					}
+					data, err := service.PackWebMessageJson(ctx, model.TypeBoom, mine, msgChainId)
 					if err != nil {
-						model.Logger.Panicf(ctx, "unkonw fail!!")
+						model.Logger.Panicf(ctx, "Failed to pack web message for boom at position (%d, %d): %v", x, y, err)
 					}
 					err = c.Conn.WriteMessage(1, data)
 					if err != nil {
-						model.Logger.Errorf(ctx, "send massage fail")
+						model.Logger.Errorf(ctx, "Failed to send boom message for position (%d, %d): %v", x, y, err)
+					} else {
+						model.Logger.Infof(ctx, "Boom message sent for mine at position (%d, %d), message count: %d", x, y, count)
 					}
 				}
 			}
 		}
+		model.Logger.Infof(ctx, "All boom messages sent.")
 		return
 	}
 
+	model.Logger.Infof(ctx, "No mine at position (%d, %d). Starting recursive reveal.", x, y)
 	result := make([]model.ClickResultpayload, 0)
-	blankCellRecursive(x, y, c, &result)
+	blankCellRecursive(ctx, x, y, c, &result)
 	if len(result) != 0 {
+		model.Logger.Infof(ctx, "Recursive reveal completed. Found %d cells to reveal.", len(result))
 		msgChainId := uuid.NewString()
 		for i := range result {
 			isEnd := (i == len(result)-1)
 			result[i].IsEnd = isEnd
 			result[i].MsgId = msgChainId
-			data, err := service.PackWebMessageJson(ctx, model.TypeResult, result[i], "")
+			data, err := service.PackWebMessageJson(ctx, model.TypeResult, result[i], msgChainId)
 			if err != nil {
-				model.Logger.Panicf(ctx, "unkonw fail!!")
+				model.Logger.Panicf(ctx, "Failed to pack web message for revealed cell at position (%d, %d): %v", result[i].X, result[i].Y, err)
 			}
 			err = c.Conn.WriteMessage(1, data)
 			if err != nil {
-				model.Logger.Errorf(ctx, "send massage fail")
+				model.Logger.Errorf(ctx, "Failed to send result message for position (%d, %d): %v", result[i].X, result[i].Y, err)
+			} else {
+				model.Logger.Infof(ctx, "Result message sent for revealed cell at position (%d, %d), message index: %d", result[i].X, result[i].Y, i)
 			}
 		}
+		model.Logger.Infof(ctx, "All result messages sent.")
+	} else {
+		model.Logger.Infof(ctx, "Recursive reveal completed. No cells to reveal.")
 	}
-
 }
-func blankCellRecursive(x, y uint, c *model.Client, result *[]model.ClickResultpayload) {
+
+func HandleRightClick(ctx context.Context, x, y uint, c *model.Client) {
+	oldValue := c.MapClient[y][x]
+	var chose byte = 0
+	switch oldValue {
+	case model.Unknown:
+		c.MapClient[y][x] = model.Flag
+		model.Logger.Infof(ctx, "MapClient[%d][%d] changed from %d to %d", y, x, oldValue, model.Flag)
+		chose = model.Flag
+	case model.Flag:
+		c.MapClient[y][x] = model.Unknown
+		model.Logger.Infof(ctx, "MapClient[%d][%d] changed from %d to %d", y, x, oldValue, model.Unknown)
+		chose = model.Unknown
+	}
+	result := model.ClickResultpayload{
+		X:       x,
+		Y:       y,
+		MineNum: chose,
+		IsEnd:   true,
+	}
+	data, err := service.PackWebMessageJson(ctx, model.TypeResult, result, "")
+	if err != nil {
+		model.Logger.Panicf(ctx, "unkonw fail!!")
+	}
+	err = c.Conn.WriteMessage(1, data)
+	if err != nil {
+		model.Logger.Errorf(ctx, "send massage fail")
+	}
+}
+
+func blankCellRecursive(ctx context.Context, x, y uint, c *model.Client, result *[]model.ClickResultpayload) {
 	directions := [8]struct{ X, Y int }{
 		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
 		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
@@ -158,8 +206,10 @@ func blankCellRecursive(x, y uint, c *model.Client, result *[]model.ClickResultp
 
 	// 计算周围雷数
 	count := getAroundMineNum(x, y, c)
-
+	model.Logger.Infof(ctx, "around[%d,%d] mine num: %d", x, y, count)
+	oldValue := c.MapClient[y][x]
 	c.MapClient[y][x] = byte(count)
+	model.Logger.Infof(ctx, "MapClient[%d][%d] changed from %d to %d", y, x, oldValue, byte(count))
 
 	if count == 0 {
 		// 如果周围没有雷，递归揭开周围
@@ -169,20 +219,16 @@ func blankCellRecursive(x, y uint, c *model.Client, result *[]model.ClickResultp
 			if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
 				continue
 			}
-			blankCellRecursive(uint(newX), uint(newY), c, result)
+			blankCellRecursive(ctx, uint(newX), uint(newY), c, result)
 		}
 	}
 
 	oneResult := &model.ClickResultpayload{
 		X:       x,
 		Y:       y,
-		MineNum: count,
+		MineNum: c.MapClient[y][x],
 	}
 	*result = append(*result, *oneResult)
-}
-
-func HandleRightClick(x, y uint) {
-
 }
 
 func getAroundMineNum(x, y uint, c *model.Client) uint {
@@ -204,6 +250,24 @@ func getAroundMineNum(x, y uint, c *model.Client) uint {
 	return uint(count)
 }
 
+func getAroundFlagNum(x, y uint, c *model.Client) uint {
+	directions := [8]struct{ X, Y int }{
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
+	}
+	count := 0
+	for _, dir := range directions {
+		newX := int(x) + dir.X
+		newY := int(y) + dir.Y
+		if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
+			continue
+		}
+		if c.MapServer[newY][newX] == model.MineCell {
+			count++
+		}
+	}
+	return uint(count)
+}
 func SaveBoardWithCoords(ctx context.Context, board [][]bool) error {
 	name := ctx.Value("requestID")
 	filename := "default.txt"
