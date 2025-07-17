@@ -61,7 +61,7 @@ func main() {
 	// Configure static file serving
 	// s.SetServerRoot("static")
 	// Set server port
-	s.SetPort(8001)
+	s.SetPort(8002)
 	// Start the server
 	s.Run()
 }

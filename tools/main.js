@@ -15,7 +15,7 @@ document.getElementById('start').addEventListener('click', () => {
 
     document.getElementById('mine-count').textContent = `剩余地雷: ${mineCount}`;
 
-    ws = new WebSocket('ws://localhost:8001/ws');
+    ws = new WebSocket('ws://localhost:8002/ws');
 
     ws.onopen = () => {
         startTime = Date.now();
@@ -134,6 +134,19 @@ function handleBoom(payload) {
     renderCells([payload]);
 }
 
+// 移除以下动态添加 CSS 样式的代码
+// const style = document.createElement('style');
+// style.textContent = `
+// @keyframes blink {
+//     50% { opacity: 0.5; }
+// }
+// 
+// .blinking {
+//     animation: blink 1s infinite;
+// }
+// `;
+// document.head.appendChild(style);
+
 function renderCells(cells) {
     cells.forEach((cellData) => {
         const cell = document.querySelector(`.cell[data-x="${cellData.x}"][data-y="${cellData.y}"]`);
@@ -149,6 +162,15 @@ function renderCells(cells) {
             cell.textContent = '';
             cell.classList.remove('flagged');
             cell.classList.remove('revealed');
+        } else if (cellData.num === 11) {
+            // 立即移除闪烁类
+            cell.classList.remove('blinking-once');
+            // 强制浏览器重绘，确保类已被移除
+            void cell.offsetWidth; 
+            // 使用 setTimeout 在下一个事件循环添加闪烁类
+            setTimeout(() => {
+                cell.classList.add('blinking-once');
+            }, 0);
         } else {
             cell.dataset.flagged = 'false';
             cell.dataset.revealed = 'true';
@@ -171,15 +193,70 @@ function renderCells(cells) {
 }
 
 function checkWin() {
-    const unrevealedCells = document.querySelectorAll('.cell:not([data-revealed="true"]):not([data-flagged="true"])');
-    if (unrevealedCells.length === 0) {
+    // 计算总格子数量
+    const totalCells = xSize * ySize;
+    // 获取所有已揭开的单元格
+    const revealedCells = document.querySelectorAll('.cell[data-revealed="true"]');
+    // 计算未揭开的格子数量
+    const unrevealedCellsCount = totalCells - revealedCells.length;
+
+    // 检查未揭开的格子数量是否等于地雷数量
+    if (unrevealedCellsCount === mineCount) {
         gameOver = true;
         clearInterval(timer);
         document.getElementById('game-status').textContent = '恭喜你，游戏胜利！';
+        
+        // 自动标记剩余未揭开的格子为地雷
+        const unrevealedCells = document.querySelectorAll('.cell:not([data-revealed="true"])');
+        unrevealedCells.forEach(cell => {
+            cell.dataset.flagged = 'true';
+            cell.textContent = '🚩';
+            cell.classList.add('flagged');
+        });
     }
 }
 
 function updateTimer() {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     document.getElementById('timer').textContent = `用时: ${elapsed} 秒`;
+}
+
+function initBoard(rows, cols) {
+    const board = document.getElementById('board');
+    // 设置 CSS 自定义属性
+    board.style.setProperty('--rows', rows);
+    board.style.setProperty('--cols', cols);
+
+    board.style.gridTemplateColumns = `repeat(${xSize}, 30px)`;
+    board.innerHTML = '';
+    const coordsElement = document.getElementById('coords');
+
+    for (let y = 0; y < ySize; y++) {
+        for (let x = 0; x < xSize; x++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.x = x;
+            cell.dataset.y = y;
+            cell.dataset.flagged = 'false';
+            cell.dataset.revealed = 'false';
+
+            cell.addEventListener('mousedown', (e) => {
+                if (gameOver) return;
+
+                e.preventDefault();
+                const isLeftClick = e.button === 0;
+                sendClick(x, y, isLeftClick);
+            });
+
+            cell.addEventListener('mouseover', () => {
+                coordsElement.textContent = `坐标: (${x}, ${y})`;
+            });
+
+            cell.addEventListener('mouseout', () => {
+                coordsElement.textContent = '坐标: (0, 0)';
+            });
+
+            board.appendChild(cell);
+        }
+    }
 }

@@ -42,44 +42,73 @@ func CreateRealMap(x, y, n, safeX, safeY uint) ([][]bool, error) {
 	for i := range board {
 		board[i] = make([]bool, x)
 	}
-	total := int(x * y)
 
-	// 先生成 [0, total) 的下标
-	indices := make([]int, 0, total-1)
-	safeIndex := int(safeY*x + safeX)
-
-	for i := 0; i < total; i++ {
-		if i == safeIndex {
-			continue // 跳过安全位置
+	// 定义首次点击位置的 8 格范围
+	var safeArea []int
+	directions := [8]struct{ X, Y int }{
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
+	}
+	for _, dir := range directions {
+		newX := int(safeX) + dir.X
+		newY := int(safeY) + dir.Y
+		if newX >= 0 && newY >= 0 && newX < int(x) && newY < int(y) {
+			safeArea = append(safeArea, newY*int(x)+newX)
 		}
-		indices = append(indices, i)
 	}
 
-	// 检查剩余可布雷格子数是否够
-	if n > uint(len(indices)) {
-		return nil, gerror.New("too many mines for available cells excluding safe cell")
+	// 生成非 8 格范围的下标
+	nonSafeIndices := make([]int, 0, int(x*y))
+	for i := 0; i < int(x*y); i++ {
+		// 排除安全位置和 8 格范围
+		if i == int(safeY*x+safeX) {
+			continue
+		}
+		isSafeArea := false
+		for _, safeIdx := range safeArea {
+			if i == safeIdx {
+				isSafeArea = true
+				break
+			}
+		}
+		if !isSafeArea {
+			nonSafeIndices = append(nonSafeIndices, i)
+		}
 	}
 
-	// 打乱 indices
-	rand.Shuffle(len(indices), func(i, j int) {
-		indices[i], indices[j] = indices[j], indices[i]
+	// 打乱非 8 格范围的下标
+	rand.Shuffle(len(nonSafeIndices), func(i, j int) {
+		nonSafeIndices[i], nonSafeIndices[j] = nonSafeIndices[j], nonSafeIndices[i]
 	})
 
-	// 前 n 个放雷
-	for i := 0; i < int(n); i++ {
-		idx := indices[i]
+	minesPlaced := 0
+	// 先在非 8 格范围布雷
+	for i := 0; i < len(nonSafeIndices) && minesPlaced < int(n); i++ {
+		idx := nonSafeIndices[i]
 		row := idx / int(x)
 		col := idx % int(x)
 		board[row][col] = true
+		minesPlaced++
+	}
+
+	// 若非 8 格范围格子不足，在 8 格范围随机布雷
+	if minesPlaced < int(n) {
+		// 打乱 8 格范围下标
+		rand.Shuffle(len(safeArea), func(i, j int) {
+			safeArea[i], safeArea[j] = safeArea[j], safeArea[i]
+		})
+		for i := 0; i < len(safeArea) && minesPlaced < int(n); i++ {
+			idx := safeArea[i]
+			row := idx / int(x)
+			col := idx % int(x)
+			board[row][col] = true
+			minesPlaced++
+		}
 	}
 
 	// 确保 safe cell 没有雷
 	board[safeY][safeX] = false
-	// for y, cow := range board {
-	// 	for x, val := range cow {
-	// 		fmt.Printf("board[%d][%d] = %t\n", y, x, val)
-	// 	}
-	// }
+
 	return board, nil
 }
 
@@ -100,74 +129,151 @@ func GetUserMap(Realmap *[][]bool) *[][]byte {
 func HandleLeftClick(ctx context.Context, x, y uint, c *model.Client) {
 	model.Logger.Infof(ctx, "Left click received at position (%d, %d) for client %s", x, y, c.ID)
 
-	if c.MapClient[y][x] != model.Unknown {
-		model.Logger.Infof(ctx, "Cell at position (%d, %d) is not in unknown state, skipping. Current state: %d", x, y, c.MapClient[y][x])
+	switch {
+	case c.MapClient[y][x] == model.Flag:
 		return
-	}
 
-	if c.MapServer[y][x] == model.MineCell {
-		model.Logger.Infof(ctx, "Mine clicked at position (%d, %d). Sending boom messages.", x, y)
-		msgChainId := uuid.NewString()
-		count := 0
-		for y, row := range c.MapServer {
-			for x, val := range row {
-				if val == model.MineCell {
-					count++
-					isEnd := (count == int(c.Map_mine_num))
-					mine := model.ClickResultpayload{
-						X:       uint(x),
-						Y:       uint(y),
-						MsgId:   msgChainId,
-						IsEnd:   isEnd,
-						MineNum: 10,
-					}
-					data, err := service.PackWebMessageJson(ctx, model.TypeBoom, mine, msgChainId)
-					if err != nil {
-						model.Logger.Panicf(ctx, "Failed to pack web message for boom at position (%d, %d): %v", x, y, err)
-					}
-					err = c.Conn.WriteMessage(1, data)
-					if err != nil {
-						model.Logger.Errorf(ctx, "Failed to send boom message for position (%d, %d): %v", x, y, err)
-					} else {
-						model.Logger.Infof(ctx, "Boom message sent for mine at position (%d, %d), message count: %d", x, y, count)
-					}
-				}
-			}
-		}
-		model.Logger.Infof(ctx, "All boom messages sent.")
+	case c.MapClient[y][x] != model.Unknown:
+		handleKnownCell(ctx, x, y, c)
 		return
-	}
 
-	model.Logger.Infof(ctx, "No mine at position (%d, %d). Starting recursive reveal.", x, y)
-	result := make([]model.ClickResultpayload, 0)
-	blankCellRecursive(ctx, x, y, c, &result)
-	if len(result) != 0 {
-		model.Logger.Infof(ctx, "Recursive reveal completed. Found %d cells to reveal.", len(result))
-		msgChainId := uuid.NewString()
-		for i := range result {
-			isEnd := (i == len(result)-1)
-			result[i].IsEnd = isEnd
-			result[i].MsgId = msgChainId
-			data, err := service.PackWebMessageJson(ctx, model.TypeResult, result[i], msgChainId)
-			if err != nil {
-				model.Logger.Panicf(ctx, "Failed to pack web message for revealed cell at position (%d, %d): %v", result[i].X, result[i].Y, err)
-			}
-			err = c.Conn.WriteMessage(1, data)
-			if err != nil {
-				model.Logger.Errorf(ctx, "Failed to send result message for position (%d, %d): %v", result[i].X, result[i].Y, err)
-			} else {
-				model.Logger.Infof(ctx, "Result message sent for revealed cell at position (%d, %d), message index: %d", result[i].X, result[i].Y, i)
-			}
-		}
-		model.Logger.Infof(ctx, "All result messages sent.")
+	case c.MapServer[y][x] == model.MineCell:
+		handleMineClick(ctx, x, y, c)
+		return
+
+	default:
+		handleBlankClick(ctx, x, y, c)
+	}
+}
+
+func handleKnownCell(ctx context.Context, x, y uint, c *model.Client) {
+	if getAroundFlagNum(x, y, c) == getAroundMineNum(x, y, c) {
+		model.Logger.Infof(ctx, "No mine around position (%d, %d) for client %s", x, y, c.ID)
+		processAroundCells(ctx, x, y, c)
 	} else {
-		model.Logger.Infof(ctx, "Recursive reveal completed. No cells to reveal.")
+		model.Logger.Infof(ctx, "Have mine around position (%d, %d) for client %s", x, y, c.ID)
+		revealUnknownAround(ctx, x, y, c)
 	}
+}
+
+func processAroundCells(ctx context.Context, x, y uint, c *model.Client) {
+	for _, dir := range getDirections() {
+		newX, newY := int(x)+dir.X, int(y)+dir.Y
+		if !inBounds(newX, newY, c) {
+			continue
+		}
+
+		if c.MapClient[newY][newX] != model.Flag && c.MapServer[newY][newX] == model.MineCell {
+			handleMineClick(ctx, uint(newX), uint(newY), c)
+			return
+		}
+
+		var result []model.ClickResultpayload
+		blankCellRecursive(ctx, uint(newX), uint(newY), c, &result)
+		sendRevealMessages(ctx, result, c, model.TypeResult)
+	}
+}
+
+func revealUnknownAround(ctx context.Context, x, y uint, c *model.Client) {
+	var result []model.ClickResultpayload
+	msgChainId := uuid.NewString()
+
+	for _, dir := range getDirections() {
+		newX, newY := int(x)+dir.X, int(y)+dir.Y
+		if !inBounds(newX, newY, c) {
+			continue
+		}
+		if c.MapClient[newY][newX] == model.Unknown {
+			result = append(result, model.ClickResultpayload{
+				X:       uint(newX),
+				Y:       uint(newY),
+				MineNum: 11,
+				MsgId:   msgChainId,
+				IsEnd:   false,
+			})
+		}
+	}
+
+	sendRevealMessages(ctx, result, c, model.TypeResult)
+}
+
+func handleMineClick(ctx context.Context, x, y uint, c *model.Client) {
+	model.Logger.Infof(ctx, "Mine clicked at position (%d, %d). Sending boom messages.", x, y)
+	msgChainId := uuid.NewString()
+	count := 0
+
+	for yIdx, row := range c.MapServer {
+		for xIdx, val := range row {
+			if val == model.MineCell {
+				count++
+				isEnd := count == int(c.Map_mine_num)
+				payload := model.ClickResultpayload{
+					X:       uint(xIdx),
+					Y:       uint(yIdx),
+					MsgId:   msgChainId,
+					IsEnd:   isEnd,
+					MineNum: 10,
+				}
+				sendMessage(ctx, c, payload, model.TypeBoom)
+			}
+		}
+	}
+
+	model.Logger.Infof(ctx, "All boom messages sent.")
+}
+
+func handleBlankClick(ctx context.Context, x, y uint, c *model.Client) {
+	model.Logger.Infof(ctx, "No mine at position (%d, %d). Starting recursive reveal.", x, y)
+	var result []model.ClickResultpayload
+	blankCellRecursive(ctx, x, y, c, &result)
+	sendRevealMessages(ctx, result, c, model.TypeResult)
+}
+
+func sendRevealMessages(ctx context.Context, result []model.ClickResultpayload, c *model.Client, msgType byte) {
+	if len(result) == 0 {
+		model.Logger.Infof(ctx, "Reveal completed. No cells to reveal.")
+		return
+	}
+
+	model.Logger.Infof(ctx, "Reveal completed. Found %d cells to reveal.", len(result))
+	msgChainId := uuid.NewString()
+
+	for i := range result {
+		result[i].IsEnd = (i == len(result)-1)
+		result[i].MsgId = msgChainId
+		sendMessage(ctx, c, result[i], msgType)
+	}
+
+	model.Logger.Infof(ctx, "All reveal messages sent.")
+}
+
+func sendMessage(ctx context.Context, c *model.Client, payload model.ClickResultpayload, msgType byte) {
+	data, err := service.PackWebMessageJson(ctx, msgType, payload, payload.MsgId)
+	if err != nil {
+		model.Logger.Panicf(ctx, "Failed to pack web message for position (%d, %d): %v", payload.X, payload.Y, err)
+	}
+	err = c.Conn.WriteMessage(1, data)
+	if err != nil {
+		model.Logger.Errorf(ctx, "Failed to send message for position (%d, %d): %v", payload.X, payload.Y, err)
+	} else {
+		model.Logger.Infof(ctx, "Message sent for position (%d, %d), type: %d", payload.X, payload.Y, msgType)
+	}
+}
+
+func getDirections() [8]struct{ X, Y int } {
+	return [8]struct{ X, Y int }{
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {1, -1}, {-1, 1}, {-1, -1},
+	}
+}
+
+func inBounds(x, y int, c *model.Client) bool {
+	return x >= 0 && y >= 0 && x < int(c.Map_size_x) && y < int(c.Map_size_y)
 }
 
 func HandleRightClick(ctx context.Context, x, y uint, c *model.Client) {
 	oldValue := c.MapClient[y][x]
-	var chose byte = 0
+	var chose byte = oldValue
 	switch oldValue {
 	case model.Unknown:
 		c.MapClient[y][x] = model.Flag
@@ -262,7 +368,7 @@ func getAroundFlagNum(x, y uint, c *model.Client) uint {
 		if newX < 0 || newY < 0 || newX >= int(c.Map_size_x) || newY >= int(c.Map_size_y) {
 			continue
 		}
-		if c.MapServer[newY][newX] == model.MineCell {
+		if c.MapClient[newY][newX] == model.Flag {
 			count++
 		}
 	}

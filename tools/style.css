@@ -57,14 +57,20 @@ body {
     padding: 10px;
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    /* 让容器宽度自适应内容 */
+    display: inline-block; 
 }
 
 #board {
     display: grid;
     gap: 2px;
+    /* 动态计算棋盘宽度，每个单元格 30px 宽，每列间隙 2px */
+    width: calc((30px * var(--cols)) + (2px * (var(--cols) - 1)));
+    /* 动态计算棋盘高度，每个单元格 30px 高，每行间隙 2px */
+    height: calc((30px * var(--rows)) + (2px * (var(--rows) - 1)));
 }
 
-.cell, .coord {
+.cell {
     width: 30px;
     height: 30px;
     text-align: center;
@@ -72,7 +78,7 @@ body {
     user-select: none;
 }
 
-.cell {
+.cell, .coord {
     /* 未挖开的单元格设置为草绿色 */
     background-color: #8bc34a; 
     cursor: pointer;
@@ -101,4 +107,14 @@ body {
     font-weight: bold;
     padding: 5px 10px;
     border-radius: 4px;
+}
+
+@keyframes blink-once {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.blinking-once {
+    animation: blink-once 0.5s 1;
 }
