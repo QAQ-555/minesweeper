@@ -8,34 +8,56 @@ const messageBuffers = new Map();
 
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-document.getElementById('start').addEventListener('click', () => {
+document.getElementById('start').addEventListener('click', startGame);
+
+// 游戏内重新开始按钮事件监听
+document.getElementById('in-game-restart').addEventListener('click', restartGame);
+
+function startGame() {
     xSize = parseInt(document.getElementById('x').value);
     ySize = parseInt(document.getElementById('y').value);
     mineCount = parseInt(document.getElementById('num').value);
 
     document.getElementById('mine-count').textContent = `剩余地雷: ${mineCount}`;
 
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+    }
     ws = new WebSocket('ws://localhost:8002/ws');
 
     ws.onopen = () => {
         startTime = Date.now();
         timer = setInterval(updateTimer, 1000);
-        ws.send(JSON.stringify({
-            type: 0,
-            id: 'sss',
-            payload: { x: xSize, y: ySize, num: mineCount }
-        }));
+        sendRestartMessage();
 
         document.getElementById('config').style.display = 'none';
         document.getElementById('game').style.display = 'block';
 
         createBoard();
     };
-    // 保留这一个 ws.onmessage 定义
+
     ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         console.log('接收到消息:', msg); // 打印接收到的消息
         switch (msg.type) {
+            case 0: // 处理重新开始游戏的消息
+                console.log('开始处理重新开始游戏的消息');
+                const payload = msg.payload;
+                // 更新游戏参数
+                xSize = payload.Map_size_x;
+                ySize = payload.Map_size_y;
+                mineCount = payload.Map_mine_num;
+                document.getElementById('mine-count').textContent = `剩余地雷: ${mineCount}`;
+                // 重新创建游戏面板
+                createBoard();
+                // 重置游戏状态
+                gameOver = false;
+                document.getElementById('game-status').textContent = '游戏进行中';
+                startTime = Date.now();
+                clearInterval(timer);
+                timer = setInterval(updateTimer, 1000);
+                document.getElementById('timer').textContent = '用时: 0 秒';
+                break;
             case 16: // TypeResult
                 console.log('开始处理 TypeResult 消息'); // 打印开始处理消息的日志
                 handleResult(msg.payload);
@@ -48,13 +70,51 @@ document.getElementById('start').addEventListener('click', () => {
                 // console.log('未知消息类型:', msg.type);
         }
     };
+
     ws.onclose = () => {
         clearInterval(timer);
         if (!gameOver) {
             document.getElementById('game-status').textContent = '连接已断开';
         }
     };
-});
+}
+
+function restartGame() {
+    xSize = parseInt(document.getElementById('in-game-x').value);
+    ySize = parseInt(document.getElementById('in-game-y').value);
+    mineCount = parseInt(document.getElementById('in-game-num').value);
+
+    document.getElementById('mine-count').textContent = `剩余地雷: ${mineCount}`;
+    gameOver = false;
+    document.getElementById('game-status').textContent = '游戏进行中';
+    document.getElementById('timer').textContent = '用时: 0 秒';
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        sendRestartMessage();
+    } else {
+        // 如果连接已关闭，重新建立连接
+        startGame();
+    }
+}
+
+function sendRestartMessage() {
+    const message = {
+        type: 0,
+        id: 'sss',
+        payload: {
+            x: xSize,
+            y: ySize,
+            num: mineCount
+        }
+    };
+    ws.send(JSON.stringify(message));
+}
+
+// 更新计时器
+function updateTimer() {
+    const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById('timer').textContent = `用时: ${elapsedTime} 秒`;
+}
 
 function createBoard() {
     const board = document.getElementById('board');

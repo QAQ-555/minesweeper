@@ -14,6 +14,13 @@
         <button id="start">开始游戏</button>
     </div>
     <div id="game" style="display: none;">
+        <!-- 游戏内配置区域 -->
+        <div id="in-game-config">
+            <label>列数: <input type="number" id="in-game-x" value="10" min="5" max="30"></label>
+            <label>行数: <input type="number" id="in-game-y" value="10" min="5" max="30"></label>
+            <label>地雷数: <input type="number" id="in-game-num" value="10" min="1"></label>
+            <button id="in-game-restart">重新开始</button>
+        </div>
         <div id="game-info">
             <div id="mine-count">剩余地雷: 0</div>
             <div id="timer">用时: 0 秒</div>

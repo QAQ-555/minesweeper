@@ -96,6 +96,9 @@ func handleClientMessages(ctx context.Context, client *model.Client) {
 		case model.TypeCtrl:
 			model.Logger.Infof(ctx, "enter ctrl")
 			err = controller.ProcessGameCtrlPayload(ctx, payload, client)
+		case model.TypeOrigin:
+			model.Logger.Infof(ctx, "enter remake")
+			err = controller.ProcessGameRemakePayload(ctx, payload, client)
 		default:
 			model.Logger.Errorf(ctx, "unknown message type: %d", gameMsgtype)
 			continue

@@ -15,13 +15,13 @@ type WebMessage struct {
 }
 
 type Client struct {
-	ID           string
-	Conn         *websocket.Conn
-	MapServer    [][]bool
-	MapClient    [][]byte
-	Map_size_x   uint
-	Map_size_y   uint
-	Map_mine_num uint
+	ID           string          `json:"ID"`
+	Conn         *websocket.Conn `json:"-"` // 连接对象通常不序列化
+	MapClient    [][]byte        `json:"-"` // 忽略 MapClient 字段
+	MapServer    [][]bool        `json:"-"` // 忽略 MapServer 字段
+	Map_size_x   uint            `json:"Map_size_x"`
+	Map_size_y   uint            `json:"Map_size_y"`
+	Map_mine_num uint            `json:"Map_mine_num"`
 }
 
 type GameCtrlpayload struct {

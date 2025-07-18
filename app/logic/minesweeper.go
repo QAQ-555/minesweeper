@@ -272,6 +272,10 @@ func inBounds(x, y int, c *model.Client) bool {
 }
 
 func HandleRightClick(ctx context.Context, x, y uint, c *model.Client) {
+	if c.MapClient[y][x] != model.Flag && c.MapClient[y][x] != model.Unknown {
+		handleKnownCell(ctx, x, y, c)
+		return
+	}
 	oldValue := c.MapClient[y][x]
 	var chose byte = oldValue
 	switch oldValue {
