@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package payload;
+
+option go_package = "minesweeper/test/payload;payload";
+// 修改为从根目录开始的相对路径
+
+
+
+message gameInitPayload{
+    int32 x = 1;
+    int32 y = 2;
+    int32 mineNum = 3;
+}
+
+message clickPayload{
+    int32 x = 1;
+    int32 y = 2;
+    bool isLeftClick = 3;
+}
+
+message mapChangeEvent{
+    int32 x = 1;
+    int32 y = 2;
+    int32 value = 3;
+}
+
+message mapChangePayload{
+    repeated mapChangeEvent events = 1;
+}
+

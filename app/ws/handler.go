@@ -9,11 +9,13 @@ import (
 	"minesweeper/app/logic"
 	"minesweeper/app/model"
 	"minesweeper/app/service"
+	msgpack "minesweeper/test"
 	"time"
 
 	"github.com/gogf/gf/v2/net/ghttp"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 )
 
 func Handler(r *ghttp.Request) {
@@ -22,8 +24,11 @@ func Handler(r *ghttp.Request) {
 		r.Response.Write(err.Error())
 		return
 	}
+
+	// Get request context for logging
+	var ctx = r.Context()
 	userID := uuid.New().String() // Generate a new UUID for the user
-	ok, option := waitForOption(ws)
+	ok, option := waitForOption(ctx, ws)
 
 	if !ok {
 		log.Println("⏳ 超时或失败，未获取 username")
@@ -31,8 +36,6 @@ func Handler(r *ghttp.Request) {
 		return
 	}
 
-	// Get request context for logging
-	var ctx = r.Context()
 	//create a real minesweeper map just have mine or not
 	var x, y, mineNum uint = option.X, option.Y, option.MineNUM
 
@@ -112,7 +115,7 @@ func handleClientMessages(ctx context.Context, client *model.Client) {
 }
 
 // 等待客户端注册用户名
-func waitForOption(ws *websocket.Conn) (bool, *model.GameOptionPayload) {
+func waitForOption(ctx context.Context, ws *websocket.Conn) (bool, *model.GameOptionPayload) {
 
 	ws.SetReadDeadline(time.Now().Add(model.WAIT_REPLY_TIME * time.Second))
 	msgCh := make(chan []byte)
@@ -121,73 +124,42 @@ func waitForOption(ws *websocket.Conn) (bool, *model.GameOptionPayload) {
 
 	// 读取消息的 goroutine
 	go func() {
-		log.Println("[goroutine] 启动")
-		defer log.Println("[goroutine] 退出")
-
 		for {
-			// log.Println("[goroutine] 开始 ReadMessage")
 			_, msg, err := ws.ReadMessage()
 			if err != nil {
-				// log.Println("[goroutine] ReadMessage 出错:", err)
-
-				// log.Println("[goroutine] 尝试写入 timeoutCh")
 				timeoutCh <- true
-				// log.Println("[goroutine] 写入 timeoutCh 成功")
-				// log.Println("[goroutine] 等待从 closeCh 读取以完成同步")
 				<-closeCh
-				// log.Println("[goroutine] 收到 closeCh:", val)
 				return
 			}
 
-			// log.Println("[goroutine] 读到消息:", string(msg))
-
-			// log.Println("[goroutine] 尝试写入 msgCh")
 			msgCh <- msg
-			// log.Println("[goroutine] 写入 msgCh 成功")
-
-			// log.Println("[goroutine] 等待从 closeCh 读取")
 			val := <-closeCh
-			// log.Println("[goroutine] 从 closeCh 收到:", val)
 			if val {
-				// log.Println("[goroutine] 收到 true，退出")
 				return
 			}
-			// log.Println("[goroutine] 收到 false，继续循环")
 		}
 	}()
 
 	defer func() {
-		// log.Println("[WaitForCondition] defer: 关闭 closeCh")
 		ws.SetReadDeadline(time.Time{})
 		close(closeCh)
 	}()
 
 	for {
-		// log.Println("[WaitForCondition] 等待 select")
 		select {
 		case <-timeoutCh:
-			// log.Println("[WaitForCondition] 从 timeoutCh 收到信号")
-			// log.Println("[WaitForCondition] 尝试写入 closeCh")
 			closeCh <- true
-			// log.Println("[WaitForCondition] 写入 closeCh 完成")
 			return false, nil
 
 		case msg := <-msgCh:
-			// log.Println("[WaitForCondition] 从 msgCh 收到:", string(msg))
-			readNext, option, err := handleRegisterMessage(msg)
-			// log.Println("[WaitForCondition] processMessage 返回:", readNext, username, err)
-
-			// log.Println("[WaitForCondition] 尝试写入 closeCh:", readNext)
+			readNext, option, err := handleRegisterMessage(ctx, msg)
 			closeCh <- readNext
-			// log.Println("[WaitForCondition] 写入 closeCh 完成")
 
 			if readNext {
-				// log.Println("[WaitForCondition] 条件满足，返回 true,", username)
 				return true, option
 			} else {
-				// log.Println("[WaitForCondition] 条件未满足，继续等待")
 				if err != nil {
-					// log.Println("[WaitForCondition] processMessage 错误:", err)
+					// 可按需保留业务错误处理
 				}
 			}
 		}
@@ -195,15 +167,32 @@ func waitForOption(ws *websocket.Conn) (bool, *model.GameOptionPayload) {
 }
 
 // 处理注册消息
-func handleRegisterMessage(msg []byte) (bool, *model.GameOptionPayload, error) {
-	msgType, _, payload, err := service.UnpackWebMessage(msg)
+func handleRegisterMessage(ctx context.Context, msg []byte) (bool, *model.GameOptionPayload, error) {
 
-	if err != nil || msgType != model.TypeOrigin {
-		return false, nil, fmt.Errorf("failed to parse message: %w", err)
+	msgbuf := &msgpack.MsgPack{}
+
+	err := proto.Unmarshal(msg, msgbuf)
+	if err != nil {
+		model.Logger.Errorf(ctx, "failed to unmarshal protobuf message: %v", err)
+		msgType, _, payload, err := service.UnpackWebMessage(msg)
+
+		if err != nil || msgType != model.TypeOrigin {
+			return false, nil, fmt.Errorf("failed to parse message: %w", err)
+		}
+		var gameoption model.GameOptionPayload
+		if err := json.Unmarshal(payload, &gameoption); err != nil {
+			return false, nil, err
+		}
+		return true, &gameoption, err
+	} else {
+		payload := msgbuf.GetGameInitPayload()
+		if payload == nil {
+			return false, nil, fmt.Errorf("invalid game init payload")
+		}
+		return true, &model.GameOptionPayload{
+			X:       uint(payload.GetX()),
+			Y:       uint(payload.GetY()),
+			MineNUM: uint(payload.GetMineNum()),
+		}, nil
 	}
-	var gameoption model.GameOptionPayload
-	if err := json.Unmarshal(payload, &gameoption); err != nil {
-		return false, nil, err
-	}
-	return true, &gameoption, err
 }

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package msgpack;
+
+
+option go_package = "minesweeper/test;msgpack";
+
+import "payload/payload.proto";
+
+message MsgPack{
+    bytes type = 1;
+    string target = 2;
+    oneof payload {
+        payload.gameInitPayload gameInitPayload = 3;
+        payload.clickPayload clickPayload = 4;
+        payload.mapChangePayload mapChangePayload = 5;
+    }
+}
